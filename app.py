@@ -7,6 +7,7 @@ import chromadb
 from groq import Groq
 from dotenv import load_dotenv
 from sentence_transformers import SentenceTransformer
+import re
 
 # ---------------- Config ----------------
 st.set_page_config(
@@ -19,7 +20,7 @@ st.set_page_config(
 st.markdown("""
 <style>
 
-/* Background */
+/* ================= Background ================= */
 .stApp{
     background:linear-gradient(180deg,#F8FAFC 0%,#EEF2F7 100%);
 }
@@ -29,10 +30,19 @@ header[data-testid="stHeader"]{background:transparent;}
 #MainMenu{visibility:hidden;}
 footer{visibility:hidden;}
 
-/* Typography */
+/* ================= Typography ================= */
 h1,h2,h3{
     color:#0F172A !important;
     font-weight:700;
+}
+
+/* Normal text */
+.stMarkdown p,
+.stMarkdown div,
+label,
+.stCaption,
+.stText{
+    color:#0F172A !important;
 }
 
 hr{
@@ -40,117 +50,183 @@ hr{
     border-top:1px solid #CBD5E1;
 }
 
-/* Buttons */
+/* ================= Buttons ================= */
 .stButton>button{
     width:100%;
-    height:48px;
-    border:none;
-    border-radius:12px;
-    background:#334155;
-    color:white;
-    font-weight:600;
+    height:62px;
+    border:1px solid #D6DEE8;
+    border-radius:18px;
+    background:white;
+    color:#000000 !important;
+    font-weight:700;
+    font-size:17px;
+    box-shadow:0 3px 10px rgba(15,23,42,.08);
     transition:.25s;
 }
 
 .stButton>button:hover{
-    background:#1E293B;
+    background:#EEF4FF;
+    border-color:#4F6BED;
+    color:#000000 !important;
+    transform:translateY(-1px);
 }
 
-/* Upload */
+/* Spacing between vertical buttons */
+.button-space{
+    margin-top:12px;
+}
+
+/* ================= Upload ================= */
 [data-testid="stFileUploader"]{
     background:white;
     border:2px dashed #CBD5E1;
-    border-radius:16px;
-    padding:16px;
+    border-radius:22px;
+    padding:28px;
 }
 
-/* Text Input */
+[data-testid="stFileUploader"] button{
+    background:#334155 !important;
+    color:white !important;
+    border-radius:12px;
+}
+
+/* ================= Text Input ================= */
 .stTextInput input{
     background:#F1F5F9;
     border:1px solid #CBD5E1;
     border-radius:12px;
-    color:#111827;
+    color:#111827 !important;
 }
 
-/* Expander */
+/* ================= Expander ================= */
 details{
     background:white;
     border:1px solid #E2E8F0;
-    border-radius:12px;
-    padding:10px;
+    border-radius:14px;
+    padding:12px;
 }
 
-/* Alerts */
-.stSuccess,.stInfo,.stWarning{
-    border-radius:12px;
+/* =====================================================
+   ALERT CARDS - BLACK TEXT FIX (Latest Streamlit)
+===================================================== */
+
+div[data-testid="stAlert"]{
+    border-radius:16px !important;
+    padding:14px 16px !important;
+    box-shadow:0 2px 8px rgba(15,23,42,.08);
+}
+
+/* Force every text element inside alerts to BLACK */
+div[data-testid="stAlert"] [data-testid="stMarkdownContainer"],
+div[data-testid="stAlert"] [data-testid="stMarkdownContainer"] *,
+div[data-testid="stAlert"] p,
+div[data-testid="stAlert"] span,
+div[data-testid="stAlert"] div,
+div[data-testid="stAlert"] strong{
+    color:#000000 !important;
+    fill:#000000 !important;
+    stroke:none !important;
+    font-weight:600 !important;
+}
+
+/* Keep icons colored */
+div[data-testid="stAlert"][kind="warning"] svg{
+    color:#D4A000 !important;
+}
+
+div[data-testid="stAlert"][kind="success"] svg{
+    color:#2E8B57 !important;
+}
+
+div[data-testid="stAlert"][kind="info"] svg{
+    color:#2563EB !important;
+}
+
+div[data-testid="stAlert"][kind="error"] svg{
+    color:#DC2626 !important;
+}
+
+/* Warning */
+div[data-testid="stAlert"][kind="warning"]{
+    background:#FFF4CC !important;
+    border-left:5px solid #D4A000 !important;
+}
+
+/* Success */
+div[data-testid="stAlert"][kind="success"]{
+    background:#DFF6E8 !important;
+    border-left:5px solid #2E8B57 !important;
+}
+
+/* Info */
+div[data-testid="stAlert"][kind="info"]{
+    background:#E8F1FF !important;
+    border-left:5px solid #3B82F6 !important;
+}
+
+/* Error */
+div[data-testid="stAlert"][kind="error"]{
+    background:#FFE6E6 !important;
+    border-left:5px solid #DC2626 !important;
+}
+
+/* ================= SQL Code Block ================= */
+.stCode{
+    border-radius:18px !important;
+    border:1px solid #334155 !important;
+    overflow:hidden;
+}
+
+.stCode pre{
+    background:#0B1220 !important;
+    font-size:17px !important;
+    line-height:1.8 !important;
+    padding:22px !important;
+}
+
+/* Preserve SQL syntax highlighting */
+.stCode code,
+.stCode span{
+    color:inherit !important;
+    font-family:"Cascadia Code","Consolas","Courier New",monospace !important;
+}
+
+/* Copy button */
+.stCode button{
+    background:#1E293B !important;
+    color:white !important;
 }
 
 </style>
 """, unsafe_allow_html=True)
 
-# ---------------- Load Environment ----------------
-load_dotenv()
-client = Groq(api_key=os.getenv("GROQ_API_KEY"))
 
-# ---------------- Models ----------------
-@st.cache_resource
-def load_model():
-    return SentenceTransformer("sentence-transformers/all-MiniLM-L6-v2")
-
-model = load_model()
-
-@st.cache_resource
-def load_chroma():
-    return chromadb.PersistentClient("./chroma_db").get_or_create_collection("mr_analyst")
-
-collection = load_chroma()
-
-CHUNK_SIZE = 1000
-OVERLAP = 150
-
-# ---------------- Helper Functions ----------------
-def extract(file):
-    ext = file.name.split(".")[-1].lower()
-    file.seek(0)
-
-    if ext == "pdf":
-        with pdfplumber.open(file) as pdf:
-            return "\n".join(filter(None, [p.extract_text() for p in pdf.pages]))
-
-    if ext == "csv":
-        file.seek(0)
-        return pd.read_csv(file).to_string(index=False)
-
-    if ext in ["xlsx", "xls"]:
-        file.seek(0)
-        return pd.read_excel(file).to_string(index=False)
-
-    file.seek(0)
-    return file.read().decode("utf-8")
-
-
-def chunk(text, size=CHUNK_SIZE, overlap=OVERLAP):
-    step = size - overlap
-    return [text[i:i+size] for i in range(0, len(text), step)]
-
-
-# ---------------- Header ----------------
-left, right = st.columns([4,1])
+# ---------------- MR Analyst Header ----------------
+left, right = st.columns([5, 2])
 
 with left:
-    st.markdown("""
-    <h1 style='margin-bottom:0;'>📊 MR Analyst</h1>
-    <p style='margin-top:5px;color:#64748B;font-size:18px;'>
-    AI Platform for Data Analysts
-    </p>
-    """, unsafe_allow_html=True)
+    st.markdown("## 📊 MR Analyst")
+    st.caption("AI Platform for Data Analysts")
 
 with right:
     st.markdown("""
-    <div style='text-align:right;padding-top:22px;color:#475569;font-weight:600;'>
-    Turning Data into Decisions
+    <div style="
+        background:white;
+        border:1px solid #E2E8F0;
+        border-radius:18px;
+        padding:16px;
+        text-align:center;
+        box-shadow:0 4px 12px rgba(15,23,42,.08);
+    ">
+        <div style="font-size:24px;">✨</div>
+        <div style="font-weight:700;color:#334155;">Turning Data into</div>
+        <div style="font-size:18px;font-weight:800;color:#2563EB;">Decisions</div>
     </div>
     """, unsafe_allow_html=True)
+
+st.markdown("<div style='margin-bottom:10px'></div>", unsafe_allow_html=True)
+
+
 
 # ---------------- Upload ----------------
 st.markdown("### Upload Files")
@@ -165,15 +241,26 @@ if files:
     st.session_state.files = files
 
 # ---------------- Manual Workflow ----------------
-col1,col2 = st.columns(2)
+st.markdown("<div class='button-space'></div>", unsafe_allow_html=True)
 
-with col1:
-    extract_clicked = st.button("📄 Extract Data")
+extract_clicked = st.button(
+    "📄  Extract Data",
+    use_container_width=True
+)
 
-with col2:
-    chunk_clicked = st.button("📚 Create Chunks & Embeddings")
+st.markdown("<div class='button-space'></div>", unsafe_allow_html=True)
 
-store_clicked = st.button("🗄️ Store in ChromaDB")
+chunk_clicked = st.button(
+    "📚  Create Chunks & Embeddings",
+    use_container_width=True
+)
+
+st.markdown("<div class='button-space'></div>", unsafe_allow_html=True)
+
+store_clicked = st.button(
+    "🗄️  Store in ChromaDB",
+    use_container_width=True
+)
 
 # Extract
 if extract_clicked:
@@ -502,8 +589,19 @@ Requirement:
             ]
         )
 
+        
+
         st.subheader("Generated SQL")
-        st.markdown(response.choices[0].message.content)
+
+        sql_text = response.choices[0].message.content
+
+        # Extract SQL from ```sql ... ``` if present
+        match = re.search(r"```sql\n(.*?)```", sql_text, re.DOTALL)
+
+        if match:
+            st.code(match.group(1).strip(), language="sql")
+        else:
+            st.code(sql_text.strip(), language="sql")
 
 # ---------------- Footer ----------------
 st.divider()
